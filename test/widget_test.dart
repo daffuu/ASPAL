@@ -11,20 +11,38 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aspal/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Email login validates input before continuing', (WidgetTester tester) async {
+    await tester.pumpWidget(const AspalApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.tap(find.text('Masuk dengan Email'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('login-submit')));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    expect(find.text('Masukkan email yang valid.'), findsOneWidget);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('Detail receives the updated note from its form route', (WidgetTester tester) async {
+    await tester.pumpWidget(const AspalApp());
+
+    final guestButton = find.text('Masuk sebagai Tamu (Guest)');
+    await tester.ensureVisible(guestButton);
+    await tester.tap(guestButton);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lat: -0.9471, Long: 100.3543'));
+    await tester.pumpAndSettle();
+    final editNoteButton = find.text('Ubah Catatan');
+    await tester.ensureVisible(editNoteButton);
+    await tester.tap(editNoteButton);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField), 'Catatan hasil test');
+    await tester.tap(find.text('Simpan Catatan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Catatan hasil test'), findsOneWidget);
   });
 }
