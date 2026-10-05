@@ -30,9 +30,11 @@ class _CatatanFormScreenState extends State<CatatanFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Tulis Catatan')),
+      appBar: AppBar(
+        title: const Text('Tulis Catatan Tambahan'),
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -41,18 +43,25 @@ class _CatatanFormScreenState extends State<CatatanFormScreen> {
             children: [
               TextFormField(
                 controller: _catatanController,
-                maxLines: 3,
+                maxLines: 4,
                 decoration: const InputDecoration(
-                  labelText: 'Catatan',
+                  labelText: 'Catatan Lapangan',
+                  hintText: 'Contoh: Sudah ditandai dengan rambu peringatan...',
+                  alignLabelWithHint: true,
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.only(bottom: 56),
+                    child: Icon(Icons.edit_note),
+                  ),
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) =>
                     Validators.minLength(value, 5, fieldName: 'Catatan'),
               ),
-              const SizedBox(height: 16),
-              FilledButton(
+              const SizedBox(height: 20),
+              FilledButton.icon(
                 onPressed: _simpan,
-                child: const Text('Simpan'),
+                icon: const Icon(Icons.save_rounded),
+                label: const Text('Simpan Catatan'),
               ),
             ],
           ),

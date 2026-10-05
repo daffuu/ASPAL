@@ -31,7 +31,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     if (!mounted || hasil == null) return; // null = pengguna batal
     setState(() => _catatan = hasil);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Catatan berhasil disimpan')),
+      const SnackBar(
+        content: Text('Catatan lapangan berhasil disimpan!'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -91,19 +94,57 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         ),
                         if (r.notes.isNotEmpty) ...[
                           const SizedBox(height: 20),
-                          const _SectionLabel('Catatan'),
+                          const _SectionLabel('Catatan Awal'),
                           _TextBlock(r.notes),
                         ],
                         const SizedBox(height: 20),
-                        const _SectionLabel('Catatan Tambahan'),
-                        _TextBlock(_catatan ?? 'Belum ada catatan.'),
-                        const SizedBox(height: 12),
+                        const _SectionLabel('Catatan Tambahan (Latihan 2)'),
+                        _catatan == null
+                            ? const _TextBlock('Belum ada catatan tambahan.')
+                            : Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(alpha: 0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle_outline,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _catatan!,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          height: 1.5,
+                                          color: AppColors.text,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                        const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
                             onPressed: _bukaFormCatatan,
                             icon: const Icon(Icons.edit_note),
-                            label: const Text('Tulis Catatan'),
+                            label: Text(
+                              _catatan == null
+                                  ? 'Tulis Catatan'
+                                  : 'Ubah Catatan',
+                            ),
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               padding: const EdgeInsets.symmetric(vertical: 14),
