@@ -5,6 +5,7 @@ import '../screens/home_shell.dart';
 import '../screens/login_screen.dart';
 import '../screens/note_form_screen.dart';
 import '../screens/report_detail_screen.dart';
+import '../screens/report_history.dart';
 
 class ReportDetailArguments {
   const ReportDetailArguments({required this.report, required this.isOnline});
@@ -25,6 +26,7 @@ class AppRoutes {
   static const home = '/home';
   static const detail = '/detail';
   static const note = '/note';
+  static const reportHistory = '/report-history';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -54,6 +56,11 @@ class AppRoutes {
         return MaterialPageRoute<String>(
           settings: settings,
           builder: (_) => NoteFormScreen(report: arguments.report),
+        );
+      case reportHistory:
+        return MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => const RiwayatLaporanPage(),
         );
       default:
         return _unknownRoute(settings);

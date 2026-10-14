@@ -73,7 +73,16 @@ class _DashboardTabState extends State<DashboardTab> {
               color: AppColors.text,
             ),
           ),
-          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.reportHistory),
+              icon: const Icon(Icons.history),
+              label: const Text('Lihat Riwayat Laporan'),
+            ),
+          ),
           if (_isLoading)
             const Center(child: CircularProgressIndicator())
           else if (_hasError)
