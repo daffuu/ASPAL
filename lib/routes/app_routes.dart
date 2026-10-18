@@ -4,8 +4,8 @@ import '../models/report.dart';
 import '../screens/catatan_form_screen.dart';
 import '../screens/home_shell.dart';
 import '../screens/login_screen.dart';
+import '../screens/merged_riwayat_screen.dart';
 import '../screens/not_found_screen.dart';
-import '../screens/report_detail_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -31,7 +31,7 @@ class AppRoutes {
         final args = settings.arguments;
         if (args is Report) {
           return MaterialPageRoute<void>(
-            builder: (_) => ReportDetailScreen(report: args),
+            builder: (_) => DetailScreen(report: args),
             settings: settings,
           );
         }

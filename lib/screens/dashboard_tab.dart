@@ -23,7 +23,7 @@ class _DashboardTabState extends State<DashboardTab> {
   ViewStatus _status = ViewStatus.loading;
   List<Report> _reports = [];
   String _errorMessage = '';
-  bool _simulateError = false; // ubah ke true untuk menguji error state
+  final bool _simulateError = false; // ubah ke true untuk menguji error state
 
   // (3) ambil data saat layar pertama kali dibuka
   @override

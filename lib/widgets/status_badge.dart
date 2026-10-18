@@ -13,22 +13,34 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (bg, fg, icon, label) = switch (status) {
       ReportStatus.draft => (
+          const Color(0xFFF1F5F9),
+          const Color(0xFF475569),
+          Icons.edit_note,
+          'Draft',
+        ),
+      ReportStatus.menungguSinyal => (
           AppColors.warningBg,
           AppColors.warningText,
-          Icons.refresh_rounded,
+          Icons.sync,
           'Menunggu Sinyal',
         ),
-      ReportStatus.synced => (
-          AppColors.successBg,
-          AppColors.successText,
-          Icons.check_circle_outline,
-          'Terkirim',
+      ReportStatus.mengirim => (
+          const Color(0xFFDBEAFE),
+          const Color(0xFF1E40AF),
+          Icons.cloud_upload_outlined,
+          'Mengirim',
         ),
-      ReportStatus.failed => (
+      ReportStatus.gagalTerkirim => (
           AppColors.dangerBg,
           AppColors.dangerText,
           Icons.error_outline,
           'Gagal Kirim',
+        ),
+      ReportStatus.terkirim => (
+          AppColors.successBg,
+          AppColors.successText,
+          Icons.check_circle_outline,
+          'Terkirim',
         ),
     };
 

@@ -479,7 +479,7 @@ class _ActionBar extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: status == ReportStatus.synced
+                child: status == ReportStatus.terkirim
                     ? Container(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
@@ -507,7 +507,7 @@ class _ActionBar extends StatelessWidget {
                     : FilledButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.send_rounded, size: 16),
-                        label: Text(status == ReportStatus.failed
+                        label: Text(status == ReportStatus.gagalTerkirim
                             ? 'Kirim Ulang'
                             : 'Kirim Sekarang'),
                         style: FilledButton.styleFrom(

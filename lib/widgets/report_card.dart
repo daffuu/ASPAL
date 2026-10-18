@@ -113,7 +113,7 @@ class NetworkPhoto extends StatelessWidget {
     return Image.network(
       url,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
+      errorBuilder: (_, _, _) => Container(
         color: AppColors.surfaceDim,
         alignment: Alignment.center,
         child: const Icon(Icons.broken_image_outlined,

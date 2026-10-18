@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import 'dashboard_tab.dart';
-import 'report_form_tab.dart';
+import 'offline_geotagging_camera.dart';
+import 'merged_riwayat_screen.dart';
 import 'settings_tab.dart';
 
 class HomeShell extends StatefulWidget {
@@ -19,7 +20,8 @@ class _HomeShellState extends State<HomeShell> {
 
   static const _subtitles = [
     'Budi Santoso',
-    'Buat Laporan Baru',
+    'Lapor Kerusakan',
+    'Riwayat Laporan',
     'Pengaturan Akun',
   ];
 
@@ -38,7 +40,8 @@ class _HomeShellState extends State<HomeShell> {
               index: _index,
               children: [
                 const DashboardTab(),
-                ReportFormTab(isOnline: _isOnline),
+                const OfflineGeotaggingCamera(),
+                const MergedRiwayatScreen(),
                 const SettingsTab(),
               ],
             ),
@@ -72,9 +75,14 @@ class _HomeShellState extends State<HomeShell> {
             label: 'Dasbor',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle_outline),
-            activeIcon: Icon(Icons.add_circle),
-            label: 'Laporan',
+            icon: Icon(Icons.camera_alt_outlined),
+            activeIcon: Icon(Icons.camera_alt),
+            label: 'Lapor',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history_outlined),
+            activeIcon: Icon(Icons.history),
+            label: 'Riwayat',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings_outlined),
