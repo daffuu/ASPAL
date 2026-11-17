@@ -1,63 +1,79 @@
 import 'package:flutter/material.dart';
 
 import '../data/report_repository.dart';
-import '../models/road_report.dart';
+import '../models/report.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_theme.dart';
 import '../widgets/report_card.dart';
+import '../widgets/state_views.dart';
+
+// (1) status tampilan
+enum ViewStatus { loading, success, error }
 
 class DashboardTab extends StatefulWidget {
-  const DashboardTab({super.key, required this.isOnline});
-
-  final bool isOnline;
+  const DashboardTab({super.key});
 
   @override
   State<DashboardTab> createState() => _DashboardTabState();
 }
 
 class _DashboardTabState extends State<DashboardTab> {
-  final _repository = const ReportRepository();
-  List<RoadReport> _reports = const [];
-  bool _isLoading = true;
-  bool _hasError = false;
+  // (2) variabel state
+  final _repository = ReportRepository();
+  ViewStatus _status = ViewStatus.loading;
+  List<Report> _reports = [];
   String _errorMessage = '';
-  // ignore: prefer_final_fields
-  bool _simulateError = false; // ubah ke true untuk menguji error state
+  final bool _simulateError = false; // ubah ke true untuk menguji error state
 
+  // (3) ambil data saat layar pertama kali dibuka
   @override
   void initState() {
     super.initState();
     _loadReports();
   }
 
+  // (4) mengambil data + menangani error
   Future<void> _loadReports() async {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-      _errorMessage = '';
-    });
-
+    if (_status != ViewStatus.loading) {
+      setState(() => _status = ViewStatus.loading);
+    }
     try {
-      if (_simulateError) {
-        throw Exception('Simulasi error');
-      }
-
-      final reports = await _repository.fetchReports();
+      final reports =
+          await _repository.fetchReports(simulateError: _simulateError);
       if (!mounted) return;
-      setState(() => _reports = reports);
+      setState(() {
+        _reports = reports;
+        _status = ViewStatus.success;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _hasError = true;
-        _errorMessage = 'Laporan gagal dimuat.';
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _status = ViewStatus.error;
       });
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // (5) isi layar tergantung status
   @override
   Widget build(BuildContext context) {
+    return _buildContent();
+  }
+
+  // (6) memilih tampilan: loading / error / empty / daftar data
+  Widget _buildContent() {
+    return switch (_status) {
+      ViewStatus.loading => const LoadingView(),
+      ViewStatus.error =>
+        ErrorView(message: _errorMessage, onRetry: _loadReports),
+      ViewStatus.success => _buildList(),
+    };
+  }
+
+  Widget _buildList() {
+    if (_reports.isEmpty) {
+      return const EmptyView(message: 'Belum ada data.');
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 96),
       child: Column(
@@ -73,50 +89,22 @@ class _DashboardTabState extends State<DashboardTab> {
               color: AppColors.text,
             ),
           ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => Navigator.of(
+          const SizedBox(height: 16),
+          for (final r in _reports) ...[
+            ReportCard(
+              location: r.coordinates,
+              time: r.time,
+              imageUrl: r.imageUrl,
+              status: r.status,
+              // (7) kirim laporan yang dipilih ke layar Detail
+              onTap: () => Navigator.pushNamed(
                 context,
-              ).pushNamed(AppRoutes.reportHistory),
-              icon: const Icon(Icons.history),
-              label: const Text('Lihat Riwayat Laporan'),
+                AppRoutes.detail,
+                arguments: r,
+              ),
             ),
-          ),
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (_hasError)
-            Center(
-              child: Column(
-                children: [
-                  Text(_errorMessage.isEmpty ? 'Laporan gagal dimuat.' : _errorMessage),
-                  TextButton.icon(
-                    onPressed: _loadReports,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Coba Lagi'),
-                  ),
-                ],
-              ),
-            )
-          else if (_reports.isEmpty)
-            const Center(child: Text('Belum ada laporan.'))
-          else
-            for (final report in _reports) ...[
-              ReportCard(
-                location: report.coordinates,
-                time: report.time,
-                imageUrl: report.imageUrl,
-                status: report.status,
-                onTap: () => Navigator.of(context).pushNamed(
-                  AppRoutes.detail,
-                  arguments: ReportDetailArguments(
-                    report: report,
-                    isOnline: widget.isOnline,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            const SizedBox(height: 16),
+          ],
         ],
       ),
     );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/road_report.dart';
+import '../models/report.dart';
 import '../theme/app_theme.dart';
 import 'status_badge.dart';
 

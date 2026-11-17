@@ -162,10 +162,10 @@ class _ReportFormTabState extends State<ReportFormTab> {
           width: double.infinity,
           height: 160,
           decoration: BoxDecoration(
-            color: const Color(0xFFEFF6FF).withValues(alpha: 0.6),
+            color: const Color(0xFFEFF6FF).withOpacity(0.6),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.3),
+              color: AppColors.primary.withOpacity(0.3),
               width: 2,
             ),
           ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../routes/app_routes.dart';
 import '../theme/app_theme.dart';
+import '../routes/app_routes.dart';
 
 class SettingsTab extends StatelessWidget {
   const SettingsTab({super.key});
@@ -79,10 +79,8 @@ class SettingsTab extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                AppRoutes.login,
-                (_) => false,
-              ),
+              onPressed: () =>
+                  Navigator.pushReplacementNamed(context, AppRoutes.login),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.danger,
                 backgroundColor: const Color(0xFFFEF2F2),

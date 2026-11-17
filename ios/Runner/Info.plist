@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Aplikasi ASPAL memerlukan akses kamera untuk mengambil foto kerusakan jalan.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Aplikasi ASPAL memerlukan akses galeri foto untuk memilih foto kerusakan jalan.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Aplikasi ASPAL memerlukan akses lokasi untuk merekam koordinat geotagging kerusakan jalan.</string>
 </dict>
 </plist>

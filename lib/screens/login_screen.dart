@@ -2,22 +2,53 @@ import 'package:flutter/material.dart';
 
 import '../routes/app_routes.dart';
 import '../theme/app_theme.dart';
-import '../widgets/login_form_dialog.dart';
+import '../utils/validators.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
-  void _enter(BuildContext context) {
-    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  // (1) key untuk Form dan controller untuk setiap field
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  // (2) buang controller saat layar ditutup
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  Future<void> _loginWithEmail(BuildContext context) async {
-    final isValid = await showDialog<bool>(
-      context: context,
-      builder: (_) => const LoginFormDialog(),
+  // (3) dijalankan saat tombol Masuk ditekan
+  void _submit() {
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) return; // ada isian yang salah -> berhenti
+
+    // Isian benar -> pindah ke Home, Login dibuang dari stack
+    Navigator.pushReplacementNamed(context, AppRoutes.home);
+  }
+
+  InputDecoration _decoration(String label, IconData icon) {
+    OutlineInputBorder border(Color color) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: color),
+        );
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 20),
+      filled: true,
+      fillColor: AppColors.surface,
+      enabledBorder: border(AppColors.border),
+      focusedBorder: border(AppColors.primary),
+      errorBorder: border(AppColors.danger),
+      focusedErrorBorder: border(AppColors.danger),
     );
-    if (!context.mounted) return;
-    if (isValid == true) _enter(context);
   }
 
   @override
@@ -35,45 +66,49 @@ class LoginScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const _Branding(),
-                        const SizedBox(height: 48),
-                        _LoginButton(
-                          label: 'Lanjutkan dengan Google',
-                          icon: const Text(
-                            'G',
-                            style: TextStyle(
-                              color: Color(0xFF4285F4),
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        const SizedBox(height: 40),
+                        // (4) bungkus field dengan Form
+                        Form(
+                          key: _formKey,
+                          autovalidateMode: AutovalidateMode.onUserInteraction,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // (5) TextField diganti TextFormField + validator
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration:
+                                    _decoration('Email', Icons.mail_outline),
+                                validator: Validators.email,
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: true,
+                                decoration: _decoration(
+                                    'Password', Icons.lock_outline),
+                                validator: Validators.password,
+                              ),
+                              const SizedBox(height: 24),
+                              // (6) tombol memanggil _submit
+                              _LoginButton(
+                                label: 'Masuk',
+                                icon: const Icon(Icons.login,
+                                    size: 20, color: Colors.white),
+                                background: AppColors.primary,
+                                foreground: Colors.white,
+                                onTap: _submit,
+                              ),
+                            ],
                           ),
-                          background: Colors.white,
-                          foreground: const Color(0xFF1F2937),
-                          border: const BorderSide(color: Color(0xFFE5E7EB)),
-                          onTap: () => _enter(context),
-                        ),
-                        const SizedBox(height: 16),
-                        _LoginButton(
-                          label: 'Gunakan Nomor Telepon',
-                          icon: const Icon(Icons.smartphone,
-                              size: 20, color: Colors.white),
-                          background: AppColors.primary,
-                          foreground: Colors.white,
-                          onTap: () => _enter(context),
-                        ),
-                        const SizedBox(height: 16),
-                        _LoginButton(
-                          label: 'Masuk dengan Email',
-                          icon: const Icon(Icons.mail_outline,
-                              size: 20, color: Color(0xFF374151)),
-                          background: const Color(0xFFF3F4F6),
-                          foreground: const Color(0xFF374151),
-                          onTap: () => _loginWithEmail(context),
                         ),
                         const SizedBox(height: 24),
                         const _OrDivider(),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                         TextButton(
-                          onPressed: () => _enter(context),
+                          onPressed: () => Navigator.pushReplacementNamed(
+                              context, AppRoutes.home),
                           style: TextButton.styleFrom(
                             foregroundColor: AppColors.textMuted,
                           ),
@@ -91,6 +126,10 @@ class LoginScreen extends StatelessWidget {
                               Icon(Icons.arrow_forward, size: 16),
                             ],
                           ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pushNamed(context, '/tidak-ada'),
+                          child: const Text('Tes 404'),
                         ),
                       ],
                     ),
@@ -121,7 +160,7 @@ class _Branding extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.25),
+                color: AppColors.primary.withOpacity(0.25),
                 blurRadius: 24,
                 offset: const Offset(0, 12),
               ),
@@ -141,8 +180,8 @@ class _Branding extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         ConstrainedBox(
-  constraints: const BoxConstraints(maxWidth: 280),
-  child: const Text(
+          constraints: const BoxConstraints(maxWidth: 280),
+          child: const Text(
             'Aplikasi Survei Pelaporan Akses Lalu-lintas',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -164,21 +203,19 @@ class _LoginButton extends StatelessWidget {
     required this.background,
     required this.foreground,
     required this.onTap,
-    this.border,
   });
 
   final String label;
   final Widget icon;
   final Color background;
   final Color foreground;
-  final BorderSide? border;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: background,
-      shape: StadiumBorder(side: border ?? BorderSide.none),
+      shape: const StadiumBorder(),
       child: InkWell(
         customBorder: const StadiumBorder(),
         onTap: onTap,

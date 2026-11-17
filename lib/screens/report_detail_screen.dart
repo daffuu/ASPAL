@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/road_report.dart';
+import '../models/report.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
@@ -9,49 +9,46 @@ import '../widgets/severity.dart';
 import '../widgets/status_badge.dart';
 
 class ReportDetailScreen extends StatefulWidget {
-  const ReportDetailScreen({
-    super.key,
-    required this.report,
-    this.isOnline = true,
-  });
+  // (1) data yang DITERIMA dari Home
+  final Report report;
 
-  final RoadReport report;
-  final bool isOnline;
+  const ReportDetailScreen({super.key, required this.report});
 
   @override
   State<ReportDetailScreen> createState() => _ReportDetailScreenState();
 }
 
 class _ReportDetailScreenState extends State<ReportDetailScreen> {
-  late String _notes;
+  // (2) menyimpan catatan yang dikirim balik dari form
+  String? _catatan;
 
-  @override
-  void initState() {
-    super.initState();
-    _notes = widget.report.notes;
-  }
-
-  Future<void> _editNotes() async {
-    final note = await Navigator.of(context).pushNamed<String>(
-      AppRoutes.note,
-      arguments: NoteFormArguments(report: widget.report),
+  // (3) buka form, TUNGGU hasilnya, lalu tampilkan
+  Future<void> _bukaFormCatatan() async {
+    final hasil = await Navigator.pushNamed<String>(
+      context,
+      AppRoutes.catatanForm,
     );
-    if (!mounted) return;
-    if (note != null) setState(() => _notes = note);
+    if (!mounted || hasil == null) return; // null = pengguna batal
+    setState(() => _catatan = hasil);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Catatan berhasil disimpan')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final report = widget.report;
+    // Di dalam State, data widget dibaca dengan "widget.report"
+    final r = widget.report;
+
     return Scaffold(
       body: Column(
         children: [
-          AppHeader(subtitle: 'Detail · ${report.id}', isOnline: widget.isOnline),
+          AppHeader(subtitle: 'Detail · ${r.id}', isOnline: true),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  _Hero(id: report.id, imageUrl: report.imageUrl),
+                  _Hero(id: r.id, imageUrl: r.imageUrl),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                     child: Column(
@@ -60,8 +57,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            StatusBadge(status: report.status, large: true),
-                            SeverityChip(severity: report.severity),
+                            StatusBadge(status: r.status, large: true),
+                            SeverityChip(severity: r.severity),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -72,7 +69,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                               Expanded(
                                 child: _InfoTile(
                                   label: 'Jenis Kerusakan',
-                                  value: report.type,
+                                  value: r.type,
                                   icon: Icons.warning_amber_rounded,
                                 ),
                               ),
@@ -80,7 +77,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                               Expanded(
                                 child: _InfoTile(
                                   label: 'Waktu Laporan',
-                                  value: report.time,
+                                  value: r.time,
                                   icon: Icons.schedule,
                                 ),
                               ),
@@ -89,50 +86,37 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         ),
                         const SizedBox(height: 20),
                         _LocationCard(
-                          address: report.address,
-                          coordinates: report.coordinates,
+                          address: r.address,
+                          coordinates: r.coordinates,
                         ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: _editNotes,
-                            icon: const Icon(Icons.edit_note),
-                            label: Text(
-                              _notes.isEmpty ? 'Tambah Catatan' : 'Ubah Catatan',
-                            ),
-                          ),
-                        ),
-                        if (_notes.isNotEmpty) ...[
+                        if (r.notes.isNotEmpty) ...[
                           const SizedBox(height: 20),
-                          const Text(
-                            'CATATAN',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Text(
-                              _notes,
-                              style: const TextStyle(
+                          const _SectionLabel('Catatan'),
+                          _TextBlock(r.notes),
+                        ],
+                        const SizedBox(height: 20),
+                        const _SectionLabel('Catatan Tambahan'),
+                        _TextBlock(_catatan ?? 'Belum ada catatan.'),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _bukaFormCatatan,
+                            icon: const Icon(Icons.edit_note),
+                            label: const Text('Tulis Catatan'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              textStyle: const TextStyle(
+                                fontWeight: FontWeight.w700,
                                 fontSize: 14,
-                                height: 1.6,
-                                color: AppColors.text,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
@@ -142,7 +126,52 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: _ActionBar(status: report.status),
+      bottomNavigationBar: _ActionBar(status: r.status),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1,
+          color: AppColors.textMuted,
+        ),
+      ),
+    );
+  }
+}
+
+class _TextBlock extends StatelessWidget {
+  const _TextBlock(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 14, height: 1.6, color: AppColors.text),
+      ),
     );
   }
 }
@@ -328,7 +357,7 @@ class _LocationCard extends StatelessWidget {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.3),
+                        color: AppColors.primary.withOpacity(0.3),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -401,7 +430,7 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.primary.withValues(alpha: 0.1)
+      ..color = AppColors.primary.withOpacity(0.1)
       ..strokeWidth = 1;
     for (double x = 0; x < size.width; x += 30) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
@@ -450,7 +479,7 @@ class _ActionBar extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: status == ReportStatus.synced
+                child: status == ReportStatus.terkirim
                     ? Container(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
@@ -478,7 +507,7 @@ class _ActionBar extends StatelessWidget {
                     : FilledButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.send_rounded, size: 16),
-                        label: Text(status == ReportStatus.failed
+                        label: Text(status == ReportStatus.gagalTerkirim
                             ? 'Kirim Ulang'
                             : 'Kirim Sekarang'),
                         style: FilledButton.styleFrom(

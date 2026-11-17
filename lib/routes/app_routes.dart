@@ -1,78 +1,56 @@
 import 'package:flutter/material.dart';
 
-import '../models/road_report.dart';
+import '../models/report.dart';
+import '../screens/catatan_form_screen.dart';
 import '../screens/home_shell.dart';
 import '../screens/login_screen.dart';
-import '../screens/note_form_screen.dart';
-import '../screens/report_detail_screen.dart';
-import '../screens/report_history.dart';
+import '../screens/merged_riwayat_screen.dart';
+import '../screens/not_found_screen.dart';
 
-class ReportDetailArguments {
-  const ReportDetailArguments({required this.report, required this.isOnline});
-
-  final RoadReport report;
-  final bool isOnline;
-}
-
-class NoteFormArguments {
-  const NoteFormArguments({required this.report});
-
-  final RoadReport report;
-}
-
-// Nama route dan pemeriksaan tipe argumen dipusatkan di sini.
 class AppRoutes {
-  static const login = '/login';
-  static const home = '/home';
-  static const detail = '/detail';
-  static const note = '/note';
-  static const reportHistory = '/report-history';
+  AppRoutes._();
 
-  static Route<dynamic> onGenerateRoute(RouteSettings settings) {
+  static const String login = '/login';
+  static const String home = '/home';
+  static const String detail = '/detail';
+  static const String catatanForm = '/catatan-form';
+
+  static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case login:
         return MaterialPageRoute<void>(
-          settings: settings,
           builder: (_) => const LoginScreen(),
+          settings: settings,
         );
       case home:
         return MaterialPageRoute<void>(
-          settings: settings,
           builder: (_) => const HomeShell(),
+          settings: settings,
         );
       case detail:
-        final arguments = settings.arguments;
-        if (arguments is! ReportDetailArguments) return _unknownRoute(settings);
-        return MaterialPageRoute<void>(
-          settings: settings,
-          builder: (_) => ReportDetailScreen(
-            report: arguments.report,
-            isOnline: arguments.isOnline,
-          ),
-        );
-      case note:
-        final arguments = settings.arguments;
-        if (arguments is! NoteFormArguments) return _unknownRoute(settings);
+        final args = settings.arguments;
+        if (args is Report) {
+          return MaterialPageRoute<void>(
+            builder: (_) => DetailScreen(report: args),
+            settings: settings,
+          );
+        }
+        return null; // data salah/kosong -> halaman 404
+      case catatanForm:
+        // <String> karena layar ini mengembalikan teks saat ditutup
         return MaterialPageRoute<String>(
+          builder: (_) => const CatatanFormScreen(),
           settings: settings,
-          builder: (_) => NoteFormScreen(report: arguments.report),
-        );
-      case reportHistory:
-        return MaterialPageRoute<void>(
-          settings: settings,
-          builder: (_) => const RiwayatLaporanPage(),
         );
       default:
-        return _unknownRoute(settings);
+        return null; // route tidak terdaftar -> halaman 404
     }
   }
 
-  static Route<dynamic> _unknownRoute(RouteSettings settings) {
+  static Route<dynamic> onUnknownRoute(RouteSettings settings) {
     return MaterialPageRoute<void>(
+      builder: (_) => NotFoundScreen(routeName: settings.name),
       settings: settings,
-      builder: (_) => const Scaffold(
-        body: Center(child: Text('Halaman tidak ditemukan.')),
-      ),
     );
   }
 }

@@ -16,6 +16,7 @@ class AspalApp extends StatelessWidget {
       theme: AppTheme.light,
       initialRoute: AppRoutes.login,
       onGenerateRoute: AppRoutes.onGenerateRoute,
+      onUnknownRoute: AppRoutes.onUnknownRoute,
     );
   }
 }
