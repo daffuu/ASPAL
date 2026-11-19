@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
 
+import '../features/auth/auth_module.dart';
 import '../routes/app_routes.dart';
 import '../theme/app_theme.dart';
 import '../utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.controller});
+
+  final AuthController? controller;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // (1) key untuk Form dan controller untuk setiap field
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // (2) buang controller saat layar ditutup
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  AuthController _getController() {
+    return widget.controller ?? context.maybeAuthController ?? AuthModule.controller;
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -25,16 +33,35 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // (3) dijalankan saat tombol Masuk ditekan
-  void _submit() {
+  Future<void> _submit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid) return; // ada isian yang salah -> berhenti
+    if (!isValid || _isLoading) return;
 
-    // Isian benar -> pindah ke Home, Login dibuang dari stack
-    Navigator.pushReplacementNamed(context, AppRoutes.home);
+    setState(() => _isLoading = true);
+
+    final controller = _getController();
+    final success = await controller.login(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } else {
+      final error = controller.errorMessage ?? 'Email atau password salah';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
   }
 
-  InputDecoration _decoration(String label, IconData icon) {
+  InputDecoration _decoration(String label, IconData icon, {Widget? suffixIcon}) {
     OutlineInputBorder border(Color color) => OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: color),
@@ -42,6 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon, size: 20),
+      suffixIcon: suffixIcon,
       filled: true,
       fillColor: AppColors.surface,
       enabledBorder: border(AppColors.border),
@@ -66,16 +94,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const _Branding(),
-                        const SizedBox(height: 40),
-                        // (4) bungkus field dengan Form
+                        const SizedBox(height: 36),
                         Form(
                           key: _formKey,
                           autovalidateMode: AutovalidateMode.onUserInteraction,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              // (5) TextField diganti TextFormField + validator
                               TextFormField(
+                                key: const Key('login-email'),
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
                                 decoration:
@@ -84,52 +111,78 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 16),
                               TextFormField(
+                                key: const Key('login-password'),
                                 controller: _passwordController,
-                                obscureText: true,
+                                obscureText: _obscurePassword,
                                 decoration: _decoration(
-                                    'Password', Icons.lock_outline),
+                                  'Password',
+                                  Icons.lock_outline,
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      size: 20,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                  ),
+                                ),
                                 validator: Validators.password,
                               ),
                               const SizedBox(height: 24),
-                              // (6) tombol memanggil _submit
                               _LoginButton(
+                                key: const Key('login-submit'),
                                 label: 'Masuk',
-                                icon: const Icon(Icons.login,
-                                    size: 20, color: Colors.white),
+                                icon: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.login,
+                                        size: 20, color: Colors.white),
                                 background: AppColors.primary,
                                 foreground: Colors.white,
-                                onTap: _submit,
+                                onTap: _isLoading ? () {} : _submit,
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
                         const _OrDivider(),
                         const SizedBox(height: 16),
-                        TextButton(
-                          onPressed: () => Navigator.pushReplacementNamed(
-                              context, AppRoutes.home),
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.textMuted,
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Masuk sebagai Tamu (Guest)',
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Belum punya akun? ',
+                              style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 14,
+                              ),
+                            ),
+                            TextButton(
+                              key: const Key('to-register-btn'),
+                              onPressed: () {
+                                Navigator.pushNamed(context, AppRoutes.register);
+                              },
+                              child: const Text(
+                                'Daftar Sekarang',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  color: AppColors.primary,
                                   fontWeight: FontWeight.w600,
+                                  fontSize: 14,
                                 ),
                               ),
-                              SizedBox(width: 6),
-                              Icon(Icons.arrow_forward, size: 16),
-                            ],
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pushNamed(context, '/tidak-ada'),
-                          child: const Text('Tes 404'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -160,7 +213,7 @@ class _Branding extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.25),
+                color: AppColors.primary.withValues(alpha: 0.25),
                 blurRadius: 24,
                 offset: const Offset(0, 12),
               ),
@@ -198,6 +251,7 @@ class _Branding extends StatelessWidget {
 
 class _LoginButton extends StatelessWidget {
   const _LoginButton({
+    super.key,
     required this.label,
     required this.icon,
     required this.background,

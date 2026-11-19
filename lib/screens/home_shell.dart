@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/auth/auth_module.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import 'dashboard_tab.dart';
@@ -19,11 +20,19 @@ class _HomeShellState extends State<HomeShell> {
   bool _isOnline = true;
 
   static const _subtitles = [
-    'Budi Santoso',
+    'Pengguna',
     'Lapor Kerusakan',
     'Riwayat Laporan',
     'Pengaturan Akun',
   ];
+
+  String _getSubtitle() {
+    if (_index == 0) {
+      final name = context.maybeAuthController?.currentUser?.displayName;
+      if (name != null && name.isNotEmpty) return name;
+    }
+    return _subtitles[_index];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +40,7 @@ class _HomeShellState extends State<HomeShell> {
       body: Column(
         children: [
           AppHeader(
-            subtitle: _subtitles[_index],
+            subtitle: _getSubtitle(),
             isOnline: _isOnline,
             onToggleOnline: () => setState(() => _isOnline = !_isOnline),
           ),

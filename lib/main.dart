@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
 
+import 'features/auth/auth_module.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_theme.dart';
 
-void main() => runApp(const AspalApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  AuthModule.init();
+  runApp(
+    AuthScope(
+      controller: AuthModule.controller,
+      child: const AspalApp(),
+    ),
+  );
+}
 
 class AspalApp extends StatelessWidget {
   const AspalApp({super.key});
@@ -14,7 +24,7 @@ class AspalApp extends StatelessWidget {
       title: 'ASPAL',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      initialRoute: AppRoutes.login,
+      initialRoute: AppRoutes.splash,
       onGenerateRoute: AppRoutes.onGenerateRoute,
       onUnknownRoute: AppRoutes.onUnknownRoute,
     );

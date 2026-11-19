@@ -28,6 +28,12 @@ class Validators {
     return null;
   }
 
+  static String? confirmPassword(String? value, String originalPassword) {
+    if (value == null || value.isEmpty) return 'Konfirmasi password wajib diisi';
+    if (value != originalPassword) return 'Konfirmasi password tidak cocok';
+    return null;
+  }
+
   static String? minLength(
     String? value,
     int min, {
@@ -50,3 +56,9 @@ class Validators {
     return null;
   }
 }
+
+/// Helper top-level functions untuk backward compatibility dengan form lama
+String? validateEmail(String? value) => Validators.email(value);
+String? validatePassword(String? value) => Validators.password(value);
+String? validateNote(String? value) => Validators.requiredField(value, fieldName: 'Catatan');
+
