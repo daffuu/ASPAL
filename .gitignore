@@ -49,3 +49,8 @@ app.*.map.json
 
 # Agent progress files
 MODUL*_PROGRESS.md
+ANALISIS_PROGRESS.md
+PRD_ASPAL.MD
+ISSUE_ASPAL.md
+*.md
+!README.md
