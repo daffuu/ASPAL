@@ -16,6 +16,8 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
+  bool _logoutPending = false;
+
   AuthController _getController() {
     return widget.controller ?? context.maybeAuthController ?? AuthModule.controller;
   }
@@ -31,8 +33,27 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   Future<void> _handleLogout(BuildContext context, AuthController controller) async {
+    if (_logoutPending) return;
+    setState(() => _logoutPending = true);
+    try {
+      await _checkQueueAndLogout(context, controller);
+    } finally {
+      if (mounted) setState(() => _logoutPending = false);
+    }
+  }
+
+  Future<void> _checkQueueAndLogout(BuildContext context, AuthController controller) async {
     // 1. Periksa jumlah item (laporan dan tindak lanjut) yang belum terkirim
-    final unsentCount = await controller.getUnsentItemCount();
+    final int unsentCount;
+    try {
+      unsentCount = await controller.getUnsentItemCount();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal memeriksa antrean. Coba keluar lagi.')),
+      );
+      return;
+    }
 
     if (!context.mounted) return;
 
@@ -87,7 +108,16 @@ class _SettingsTabState extends State<SettingsTab> {
     if (!context.mounted) return;
 
     // 3. Lakukan logout dan pembersihan data lokal akun
-    final result = await controller.logout();
+    final LogoutResult result;
+    try {
+      result = await controller.logout();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pembersihan data lokal gagal. Coba keluar lagi.')),
+      );
+      return;
+    }
 
     if (!context.mounted) return;
 
@@ -216,7 +246,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 width: double.infinity,
                 child: OutlinedButton(
                   key: const Key('settings-logout-btn'),
-                  onPressed: () => _handleLogout(context, controller),
+                  onPressed: _logoutPending ? null : () => _handleLogout(context, controller),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.danger,
                     backgroundColor: const Color(0xFFFEF2F2),

@@ -16,6 +16,7 @@ class AuthRepositoryImpl implements AuthRepository {
   final AuthLocalDataSource _local;
   final AuthRemoteDataSource _remote;
   final Duration offlineSessionDuration;
+  final _refreshes = <String, Future<AuthSession>>{};
 
   @override
   Future<AuthSession> register({
@@ -119,9 +120,9 @@ class AuthRepositoryImpl implements AuthRepository {
 
     // Jika access token sudah kedaluwarsa tetapi sesi offline masih valid,
     // coba perbarui access token jika online.
-    if (session.isAccessTokenExpired()) {
+    if (session.needsTokenRefresh) {
       try {
-        final updatedSession = await refreshSession();
+        final updatedSession = await _refresh(session);
         return updatedSession;
       } on NetworkException {
         // Gangguan jaringan tidak otomatis dianggap sebagai sesi dicabut.
@@ -132,7 +133,6 @@ class AuthRepositoryImpl implements AuthRepository {
         return session;
       } on InvalidTokenException {
         // Refresh token ditolak oleh server -> sesi tidak valid.
-        await _local.clearSession();
         return null;
       } catch (_) {
         return session;
@@ -155,6 +155,18 @@ class AuthRepositoryImpl implements AuthRepository {
           'Masa berlaku sesi offline 30 hari telah berakhir');
     }
 
+    return _refresh(session);
+  }
+
+  Future<AuthSession> _refresh(AuthSession session) {
+    return _refreshes.putIfAbsent(session.refreshToken, () {
+      return _rotateTokens(session).whenComplete(() {
+        _refreshes.remove(session.refreshToken);
+      });
+    });
+  }
+
+  Future<AuthSession> _rotateTokens(AuthSession session) async {
     try {
       final response = await _remote.refreshToken(
         refreshToken: session.refreshToken,
@@ -166,6 +178,9 @@ class AuthRepositoryImpl implements AuthRepository {
         tokenExpiresAt: response.tokenExpiresAt,
       );
 
+      if ((await _local.getSession())?.refreshToken != session.refreshToken) {
+        throw const InvalidTokenException('Sesi telah berubah');
+      }
       await _local.updateTokens(
         accessToken: response.accessToken,
         refreshToken: response.refreshToken,
@@ -175,7 +190,9 @@ class AuthRepositoryImpl implements AuthRepository {
       return updatedSession;
     } on InvalidTokenException {
       // Refresh token ditolak oleh server -> bersihkan sesi lokal
-      await _local.clearSession();
+      if ((await _local.getSession())?.refreshToken == session.refreshToken) {
+        await _local.clearSession();
+      }
       rethrow;
     }
   }
@@ -197,7 +214,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } on NetworkException {
       // Offline fallback ke cache SharedPreferences
       final cached = await _local.getCachedProfile();
-      if (cached != null) return cached;
+      if (cached != null && cached.userId == session.userId) return cached;
       return session.toUser();
     }
   }
@@ -252,14 +269,16 @@ class AuthRepositoryImpl implements AuthRepository {
       return null;
     }
 
-    // Jika access token sudah expired, coba refresh jika memungkinkan
-    if (session.isAccessTokenExpired()) {
+    if (session.needsTokenRefresh) {
       try {
-        final refreshed = await refreshSession();
+        final refreshed = await _refresh(session);
         return refreshed.accessToken;
-      } catch (_) {
-        // Jika offline, kembalikan access token yang tersimpan
-        return session.accessToken;
+      } on InvalidTokenException {
+        return null;
+      } on NetworkException {
+        return session.isAccessTokenExpired() ? null : session.accessToken;
+      } on ServerException {
+        return session.isAccessTokenExpired() ? null : session.accessToken;
       }
     }
 
@@ -279,13 +298,13 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<String?> getRefreshToken() async {
     final session = await _local.getSession();
-    return session?.refreshToken;
+    return session?.isOfflineSessionValid() == true ? session!.refreshToken : null;
   }
 
   @override
   Future<String?> getUserId() async {
     final session = await _local.getSession();
-    return session?.userId;
+    return session?.isOfflineSessionValid() == true ? session!.userId : null;
   }
 
   @override

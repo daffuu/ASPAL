@@ -5,7 +5,8 @@ import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import 'dashboard_tab.dart';
 import 'offline_geotagging_camera.dart';
-import 'merged_riwayat_screen.dart';
+import '../app_modules.dart';
+import 'my_report_history.dart';
 import 'settings_tab.dart';
 
 class HomeShell extends StatefulWidget {
@@ -50,7 +51,13 @@ class _HomeShellState extends State<HomeShell> {
               children: [
                 const DashboardTab(),
                 const OfflineGeotaggingCamera(),
-                const MergedRiwayatScreen(),
+                MyReportHistory(
+                  key: ValueKey(
+                    context.maybeAuthController?.currentUser?.userId,
+                  ),
+                  repository: reportsModule.repository,
+                  active: _index == 2,
+                ),
                 const SettingsTab(),
               ],
             ),

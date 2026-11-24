@@ -228,7 +228,7 @@ class _MergedRiwayatScreenState extends State<MergedRiwayatScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.inbox_outlined,
-                          size: 48, color: AppColors.textMuted.withOpacity(0.4)),
+                          size: 48, color: AppColors.textMuted.withValues(alpha: 0.4)),
                       const SizedBox(height: 12),
                       const Text(
                         'Belum ada laporan pada kategori ini',
@@ -262,7 +262,7 @@ class _MergedRiwayatScreenState extends State<MergedRiwayatScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -357,7 +357,7 @@ class _MergedRiwayatScreenState extends State<MergedRiwayatScreen> {
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
+                                    color: Colors.black.withValues(alpha: 0.1),
                                     blurRadius: 2),
                               ],
                             ),
@@ -603,7 +603,7 @@ class _CounterItem extends StatelessWidget {
             fontSize: 10,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
-            color: color.withOpacity(0.85),
+            color: color.withValues(alpha: 0.85),
           ),
         ),
       ],

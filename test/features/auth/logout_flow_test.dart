@@ -7,6 +7,21 @@ import 'package:aspal/features/auth/auth_module.dart';
 import 'package:aspal/routes/app_routes.dart';
 import 'package:aspal/screens/settings_tab.dart';
 
+class _FailingGateway extends MockAccountLocalDataGateway {
+  bool failCount = true;
+
+  @override
+  Future<int> getUnsentItemCount(String userId) async {
+    if (failCount) throw StateError('Antrean tidak tersedia');
+    return super.getUnsentItemCount(userId);
+  }
+
+  @override
+  Future<void> clearUserData(String userId) async {
+    throw StateError('Gagal menghapus data');
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -63,6 +78,28 @@ void main() {
   }
 
   group('Logout & FR-03 Comprehensive Tests', () {
+    testWidgets('Logout dapat dicoba lagi setelah gagal membaca atau membersihkan antrean', (tester) async {
+      final gateway = _FailingGateway();
+      authController = AuthController(authRepository: authRepository, accountLocalDataGateway: gateway);
+      await authController.login('zaki@aspal.id', 'password123');
+      await tester.pumpWidget(buildSettingsApp());
+      await tester.pumpAndSettle();
+      final logout = find.byKey(const Key('settings-logout-btn'));
+      await tester.tap(logout);
+      await tester.pumpAndSettle();
+      expect(find.text('Gagal memeriksa antrean. Coba keluar lagi.'), findsOneWidget);
+      expect(authController.isAuthenticated, isTrue);
+
+      gateway.failCount = false;
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(logout);
+      await tester.pumpAndSettle();
+      expect(find.text('Pembersihan data lokal gagal. Coba keluar lagi.'), findsOneWidget);
+      expect(authController.isAuthenticated, isTrue);
+      expect(await localDataSource.getSession(), isNotNull);
+    });
+
     testWidgets('Logout langsung ketika antrean laporan & tindak lanjut kosong (count = 0)',
         (tester) async {
       await authRepository.login(

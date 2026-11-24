@@ -55,7 +55,8 @@ class AuthController extends ChangeNotifier {
       final session = await authRepository.restoreSession();
       if (session != null) {
         _currentSession = session;
-        _currentUser = await authRepository.getCachedProfile() ?? session.toUser();
+        final cached = await authRepository.getCachedProfile();
+        _currentUser = cached?.userId == session.userId ? cached : session.toUser();
 
         // Tentukan apakah sesi berjalan dalam mode online penuh atau offline
         if (session.isAccessTokenExpired()) {
@@ -141,8 +142,15 @@ class AuthController extends ChangeNotifier {
 
   /// Mengambil profil terbaru dari backend / cache.
   Future<void> refreshProfile() async {
+    final session = _currentSession;
     try {
       final user = await authRepository.getProfile();
+      if (session == null ||
+          !identical(session, _currentSession) ||
+          session.userId != user.userId ||
+          !isAuthenticated) {
+        return;
+      }
       _currentUser = user;
       notifyListeners();
     } catch (_) {
@@ -206,11 +214,7 @@ class AuthController extends ChangeNotifier {
     if (userId == null || userId.isEmpty || accountLocalDataGateway == null) {
       return 0;
     }
-    try {
-      return await accountLocalDataGateway!.getUnsentItemCount(userId);
-    } catch (_) {
-      return 0;
-    }
+    return accountLocalDataGateway!.getUnsentItemCount(userId);
   }
 
   /// Melakukan logout dan membersihkan sesi serta data lokal akun.
@@ -221,21 +225,24 @@ class AuthController extends ChangeNotifier {
   /// 3. Hapus cache profil di SharedPreferences.
   /// 4. Panggil gateway untuk membersihkan draft & data lokal terikat akun.
   Future<LogoutResult> logout() async {
+    final previousStatus = _status;
     _status = AuthStatus.authenticating;
     notifyListeners();
 
     final userId = _currentUser?.userId ?? _currentSession?.userId;
 
     // Bersihkan data lokal akun melalui gateway jika userId valid
-    if (userId != null && userId.isNotEmpty && accountLocalDataGateway != null) {
-      try {
-        await accountLocalDataGateway!.clearUserData(userId);
-      } catch (_) {
-        // Kegagalan lokal gateway tidak menghentikan pembersihan sesi auth
+    final LogoutResult result;
+    try {
+      if (userId != null && userId.isNotEmpty) {
+        await accountLocalDataGateway?.clearUserData(userId);
       }
+      result = await authRepository.logout();
+    } catch (_) {
+      _status = previousStatus;
+      notifyListeners();
+      rethrow;
     }
-
-    final result = await authRepository.logout();
     _currentSession = null;
     _currentUser = null;
     _status = AuthStatus.unauthenticated;

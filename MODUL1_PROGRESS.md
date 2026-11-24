@@ -273,7 +273,7 @@ final TokenProvider tokenProvider = AuthModule.repository;
 class ApiClient {
   Future<Response> makeRequest(String endpoint) async {
     // 1. Periksa validitas sesi sebelum request
-    if (!tokenProvider.isSessionValid()) {
+    if (!await tokenProvider.isSessionValid()) {
       throw InvalidTokenException('Sesi tidak valid');
     }
 
@@ -289,9 +289,11 @@ class ApiClient {
   Future<void> handleUnauthorized() async {
     final newToken = await tokenProvider.refreshToken();
     if (newToken == null) {
-      // Token benar-benar tidak valid — JEDA sinkronisasi, JANGAN hapus antrean
-      // Notify AuthController untuk invalidate session
-      AuthModule.controller.handleRemoteSessionRevoked();
+      // Jeda sinkronisasi dan pertahankan antrean, termasuk saat offline.
+      if (!await tokenProvider.isSessionValid()) {
+        await AuthModule.controller.initialize();
+      }
+      return;
     }
     // Jika newToken ada, coba request ulang
   }
@@ -304,7 +306,7 @@ class ApiClient {
 | `getAccessToken()` | `Future<String?>` | Token saat ini; null jika tidak ada sesi |
 | `getRefreshToken()` | `Future<String?>` | Refresh token; null jika tidak ada sesi |
 | `getUserId()` | `Future<String?>` | User ID aktif; null jika tidak ada sesi |
-| `isSessionValid()` | `bool` | True jika sesi offline 30 hari masih berlaku |
+| `isSessionValid()` | `Future<bool>` | True jika sesi offline 30 hari masih berlaku |
 | `refreshToken()` | `Future<String?>` | Access token baru; null jika gagal |
 
 **Aturan penting untuk background sync:**

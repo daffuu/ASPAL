@@ -19,11 +19,11 @@ class AppHeader extends StatelessWidget {
     final top = MediaQuery.of(context).padding.top;
 
     final pillBg = isOnline
-        ? const Color(0xFF1E40AF).withOpacity(0.5)
-        : AppColors.accent.withOpacity(0.2);
+        ? const Color(0xFF1E40AF).withValues(alpha: 0.5)
+        : AppColors.accent.withValues(alpha: 0.2);
     final pillBorder = isOnline
         ? const Color(0xFF60A5FA)
-        : const Color(0xFFFB923C).withOpacity(0.5);
+        : const Color(0xFFFB923C).withValues(alpha: 0.5);
     final pillText =
         isOnline ? const Color(0xFFDBEAFE) : const Color(0xFFFFEDD5);
 
@@ -34,7 +34,7 @@ class AppHeader extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),

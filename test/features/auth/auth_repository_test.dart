@@ -161,6 +161,7 @@ void main() {
 
       // Simulasikan perangkat sedang offline / gangguan jaringan
       remoteDataSource.simulateNetworkError = true;
+      expect(await authRepository.getAccessToken(), isNull);
 
       // restoreSession mencoba refresh, gagal jaringan, tapi sesi offline tetap valid!
       final restored = await authRepository.restoreSession();
@@ -196,6 +197,32 @@ void main() {
 
       final localSession = await localDataSource.getSession();
       expect(localSession, isNull);
+    });
+
+    test('Token yang ditolak tidak dikembalikan ke API client', () async {
+      final session = await authRepository.login(
+        email: 'zaki@aspal.id', password: 'password123',
+      );
+      await localDataSource.saveSession(session.copyWith(tokenExpiresAt: DateTime.now()));
+      remoteDataSource.simulateInvalidRefreshToken = true;
+      expect(await authRepository.getAccessToken(), isNull);
+      expect(await authRepository.isSessionValid(), isFalse);
+    });
+
+    test('Permintaan bersamaan memperbarui token hampir kedaluwarsa sekali', () async {
+      final session = await authRepository.login(
+        email: 'zaki@aspal.id', password: 'password123',
+      );
+      await localDataSource.saveSession(session.copyWith(
+        tokenExpiresAt: DateTime.now().add(const Duration(seconds: 30)),
+      ));
+      final tokens = await Future.wait([
+        authRepository.getAccessToken(), authRepository.getAccessToken(),
+      ]);
+      expect(tokens.first, isNotNull);
+      expect(tokens.first, isNot(session.accessToken));
+      expect(tokens.last, tokens.first);
+      expect(await authRepository.getAccessToken(), tokens.first);
     });
 
     test('Implementasi TokenProvider untuk API Client dan Background Sync',

@@ -242,7 +242,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -267,7 +267,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
     return Container(
       height: 32,
       width: 1,
-      color: Colors.grey.withOpacity(0.2),
+      color: Colors.grey.withValues(alpha: 0.2),
     );
   }
 
@@ -291,7 +291,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
             fontSize: 10,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
-            color: color.withOpacity(0.85),
+            color: color.withValues(alpha: 0.85),
           ),
         ),
       ],
@@ -309,7 +309,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -345,7 +345,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
                           color: Colors.white,
                           shape: BoxShape.circle,
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2),
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 2),
                           ],
                         ),
                         child: _getSmallStatusIcon(report.status),
@@ -629,7 +629,7 @@ class _RiwayatLaporanPageState extends State<RiwayatLaporanPage> {
           Container(
             margin: const EdgeInsets.symmetric(vertical: 12),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(16)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(16)),
             child: const Row(
               children: [
                 Icon(Icons.wifi, size: 14, color: Color(0xFF86EFAC)),

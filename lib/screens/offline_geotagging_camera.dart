@@ -1,18 +1,33 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:flutter/services.dart' show PlatformException;
+
+import '../app_modules.dart';
+import '../features/reports/data/report_capture.dart';
+import '../features/reports/domain/models/report.dart';
+import '../features/reports/domain/models/sync_status.dart';
+import '../features/reports/report_form_service.dart';
+import '../features/reports/presentation/report_location_map.dart';
 
 import '../theme/app_theme.dart';
-import '../data/report_repository.dart';
-import '../models/report.dart';
+import '../data/report_repository.dart' show kCategories, kSeverityLabels;
 
 // ==========================================
 // HALAMAN UTAMA: KAMERA + GEO-TAGGING (FR-01, FR-02, FR-03)
 // ==========================================
 class OfflineGeotaggingCamera extends StatefulWidget {
-  const OfflineGeotaggingCamera({super.key});
+  const OfflineGeotaggingCamera({
+    super.key,
+    this.service,
+    this.capture,
+    this.initialReport,
+  });
+  final Report? initialReport;
+  final ReportFormService? service;
+  final ReportCapture? capture;
 
   @override
   State<OfflineGeotaggingCamera> createState() =>
@@ -22,111 +37,150 @@ class OfflineGeotaggingCamera extends StatefulWidget {
 class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
   File? _imageFile;
   Uint8List? _imageBytes;
-  String? _imagePath;
-  final ImagePicker _picker = ImagePicker();
-
-  double? _latitude;
-  double? _longitude;
+  late final _service =
+      widget.service ?? ReportFormService(reportsModule.repository);
+  late final _capture = widget.capture ?? ReportCapture();
+  Report? _editing;
+  double? _latitude, _longitude, _accuracy;
   String _gpsSource = '';
-  bool _isLoadingGps = false;
+  bool _busy = false;
 
-  // --- GPS ---
-  Future<void> _getGeoLocation() async {
-    setState(() => _isLoadingGps = true);
+  void _message(String text) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
+  Future<void> _getImage(ImageSource source) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Layanan GPS/Lokasi belum aktif!'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        setState(() => _isLoadingGps = false);
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          setState(() => _isLoadingGps = false);
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                '⚠️ Izin lokasi ditolak permanen. Aktifkan di pengaturan.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        setState(() => _isLoadingGps = false);
-        return;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
-      );
-
-      if (!mounted) return;
+      final photo = await _capture.capture(source);
+      if (photo == null || !mounted) return;
       setState(() {
-        _latitude = position.latitude;
-        _longitude = position.longitude;
-        _gpsSource = 'camera';
-        _isLoadingGps = false;
+        _imageBytes = photo.bytes;
+        _imageFile = null;
+        _gpsSource = photo.source;
+        _latitude = photo.location?.latitude;
+        _longitude = photo.location?.longitude;
+        _accuracy = photo.location?.accuracy;
       });
-    } catch (e) {
-      debugPrint('GPS Error: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingGps = false;
-          _gpsSource = 'manual';
-        });
+      if (photo.warning != null) {
+        _message('${photo.warning} Foto dapat disimpan sebagai draft.');
       }
+    } on PlatformException {
+      if (mounted) {
+        _message('Akses kamera atau galeri gagal. Periksa izin aplikasi.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _message('Gagal membaca atau memperkecil foto. Pilih foto lain.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  // --- IMAGE PICKER (FR-01, FR-02) ---
-  Future<void> _getImage(ImageSource source) async {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialReport != null) _load(widget.initialReport);
+  }
+
+  void _load(Report? report) {
+    final data = report?.content;
+    setState(() {
+      _editing = report;
+      _imageBytes = null;
+      _imageFile = data?.photoLocalPath == null
+          ? null
+          : File(data!.photoLocalPath!);
+      _latitude = data?.latitude;
+      _longitude = data?.longitude;
+      _accuracy = data?.gpsAccuracy;
+      _gpsSource = data?.gpsSource ?? '';
+    });
+  }
+
+  Future<void> _chooseDraft() async {
+    setState(() => _busy = true);
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: source,
-        imageQuality: 80, // NFR-03: kompresi
-      );
-
-      if (pickedFile != null) {
-        final bytes = await pickedFile.readAsBytes();
-        setState(() {
-          _imageBytes = bytes;
-          _imagePath = pickedFile.path;
-          if (!kIsWeb) {
-            _imageFile = File(pickedFile.path);
-          }
-        });
-
-        if (source == ImageSource.camera) {
-          // FR-01: otomatis mengunci GPS saat foto diambil
-          await _getGeoLocation();
-        } else {
-          // FR-02: foto dari galeri => manual GPS
-          setState(() {
-            _latitude = null;
-            _longitude = null;
-            _gpsSource = 'manual';
-          });
-        }
+      final rows = (await _service.repository.getReportsByUser())
+          .where(
+            (r) =>
+                r.syncStatus == SyncStatus.draft ||
+                r.syncStatus == SyncStatus.gagalTerkirim,
+          )
+          .toList();
+      if (!mounted) return;
+      if (rows.isEmpty) {
+        _message('Belum ada laporan yang dapat diedit.');
+        return;
       }
-    } catch (e) {
-      debugPrint('Image Picker Error: $e');
+      setState(() => _busy = false);
+      final selected = await showModalBottomSheet<Report>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: rows.length,
+            itemBuilder: (_, i) => ListTile(
+              title: Text(
+                rows[i].content.description ??
+                    rows[i].content.category ??
+                    'Draft tanpa judul',
+              ),
+              subtitle: Text(
+                '${rows[i].syncStatus.databaseValue} · ${rows[i].updatedAt.toLocal()}',
+              ),
+              onTap: () => Navigator.pop(ctx, rows[i]),
+            ),
+          ),
+        ),
+      );
+      if (mounted && selected != null) _load(selected);
+    } catch (error) {
+      if (mounted) _message(_formError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    final report = _editing!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus laporan ini?'),
+        content: const Text('Laporan dan salinan foto lokal akan dihapus.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      final deleted = await _service.repository.deleteReport(report.reportId);
+      if (!mounted) return;
+      if (deleted && widget.initialReport != null) {
+        Navigator.pop(context, true);
+        return;
+      }
+      _load(null);
+      _message(
+        deleted
+            ? 'Laporan dihapus.'
+            : 'Laporan terkunci atau tidak tersedia untuk akun ini.',
+      );
+    } catch (error) {
+      if (mounted) _message(_formError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -203,46 +257,28 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
   }
 
   // --- VALIDASI & NAVIGASI KE FORM DETAIL ---
-  void _validateAndNext() {
-    if (_imageBytes == null && _imageFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('⚠️ Harap unggah foto kerusakan terlebih dahulu!'),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-      return;
-    }
-
-    if (_gpsSource == 'camera' && (_latitude == null || _longitude == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('⚠️ Tunggu sebentar, titik GPS masih dikunci...'),
-          backgroundColor: AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-      return;
-    }
-
-    Navigator.push(
+  Future<void> _validateAndNext() async {
+    final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => _DetailLaporanForm(
+        builder: (_) => _DetailLaporanForm(
+          service: _service,
+          editing: _editing,
           imageFile: _imageFile,
           imageBytes: _imageBytes,
-          imagePath: _imagePath ?? _imageFile?.path ?? '',
           latitude: _latitude,
           longitude: _longitude,
           gpsSource: _gpsSource,
+          accuracy: _accuracy,
         ),
       ),
     );
+    if (saved != true || !mounted) return;
+    if (widget.initialReport == null) {
+      _load(null);
+    } else {
+      Navigator.pop(context, false);
+    }
   }
 
   @override
@@ -285,9 +321,41 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
           ),
           const SizedBox(height: 20),
 
+          if (_busy) const LinearProgressIndicator(),
+          if (_editing == null)
+            TextButton.icon(
+              onPressed: _busy ? null : _chooseDraft,
+              icon: const Icon(Icons.edit_note),
+              label: const Text('Buka laporan untuk diedit'),
+            )
+          else ...[
+            Text(
+              'Mengedit: ${_editing!.content.description ?? _editing!.reportId}',
+            ),
+            Wrap(
+              children: [
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          if (widget.initialReport == null) {
+                            _load(null);
+                          } else {
+                            Navigator.pop(context);
+                          }
+                        },
+                  child: const Text('Batal edit'),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : _delete,
+                  child: const Text('Hapus laporan'),
+                ),
+              ],
+            ),
+          ],
           // Photo picker area
           GestureDetector(
-            onTap: () => _showPickerOptions(context),
+            onTap: _busy ? null : () => _showPickerOptions(context),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: double.infinity,
@@ -311,13 +379,13 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                         fit: StackFit.expand,
                         children: [
                           if (_imageBytes != null)
-                            Image.memory(
-                              _imageBytes!,
-                              fit: BoxFit.cover,
-                            )
+                            Image.memory(_imageBytes!, fit: BoxFit.cover)
                           else if (_imageFile != null)
                             Image.file(
                               _imageFile!,
+                              errorBuilder: (_, error, stack) => const Text(
+                                'Foto tidak ditemukan. Pilih foto pengganti.',
+                              ),
                               fit: BoxFit.cover,
                             ),
                           // Overlay gradient
@@ -326,10 +394,7 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                               gradient: LinearGradient(
                                 begin: Alignment.bottomCenter,
                                 end: Alignment.center,
-                                colors: [
-                                  Color(0x66000000),
-                                  Color(0x00000000),
-                                ],
+                                colors: [Color(0x66000000), Color(0x00000000)],
                               ),
                             ),
                           ),
@@ -338,7 +403,9 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                             left: 12,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0x80000000),
                                 borderRadius: BorderRadius.circular(20),
@@ -346,8 +413,11 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.check_circle,
-                                      size: 12, color: Colors.white),
+                                  Icon(
+                                    Icons.check_circle,
+                                    size: 12,
+                                    color: Colors.white,
+                                  ),
                                   SizedBox(width: 4),
                                   Text(
                                     'Foto terpilih',
@@ -402,7 +472,7 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
           ),
 
           // GPS Info Card
-          if (_imageFile != null) ...[
+          if (_imageFile != null || _imageBytes != null) ...[
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
@@ -434,7 +504,9 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                       Expanded(
                         child: Text(
                           _gpsSource == 'camera'
-                              ? 'Koordinat GPS Terkunci (Otomatis)'
+                              ? (_latitude == null
+                                    ? 'GPS belum tersedia'
+                                    : 'Koordinat GPS Terkunci (Otomatis)')
                               : 'Koordinat GPS (Manual dari Galeri)',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
@@ -448,7 +520,7 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_isLoadingGps)
+                  if (_busy)
                     const Row(
                       children: [
                         SizedBox(
@@ -471,7 +543,7 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                     )
                   else ...[
                     Text(
-                      'Latitude : ${_latitude ?? "Isi manual di form berikutnya"}',
+                      'Latitude : ${_latitude ?? "—"}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.text,
@@ -479,7 +551,7 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Longitude: ${_longitude ?? "Isi manual di form berikutnya"}',
+                      'Longitude: ${_longitude ?? "—"}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.text,
@@ -501,14 +573,17 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
                   setState(() {
                     _imageBytes = null;
                     _imageFile = null;
-                    _imagePath = null;
+                    _accuracy = null;
                     _latitude = null;
                     _longitude = null;
                     _gpsSource = '';
                   });
                 },
-                icon: const Icon(Icons.delete_outline,
-                    color: AppColors.danger, size: 16),
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: AppColors.danger,
+                  size: 16,
+                ),
                 label: const Text(
                   'Hapus Foto',
                   style: TextStyle(
@@ -527,14 +602,16 @@ class _OfflineGeotaggingCameraState extends State<OfflineGeotaggingCamera> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _validateAndNext,
+              onPressed: _busy ? null : _validateAndNext,
               icon: const Icon(Icons.arrow_forward_rounded, size: 18),
               label: const Text('Selanjutnya (Isi Detail Laporan)'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle:
-                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -616,8 +693,11 @@ class _PickerOption extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right,
-                  size: 18, color: AppColors.textMuted),
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
             ],
           ),
         ),
@@ -632,7 +712,9 @@ class _PickerOption extends StatelessWidget {
 class _DetailLaporanForm extends StatefulWidget {
   final File? imageFile;
   final Uint8List? imageBytes;
-  final String imagePath;
+  final ReportFormService service;
+  final Report? editing;
+  final double? accuracy;
   final double? latitude;
   final double? longitude;
   final String gpsSource;
@@ -640,7 +722,9 @@ class _DetailLaporanForm extends StatefulWidget {
   const _DetailLaporanForm({
     this.imageFile,
     this.imageBytes,
-    required this.imagePath,
+    required this.service,
+    this.editing,
+    this.accuracy,
     this.latitude,
     this.longitude,
     required this.gpsSource,
@@ -656,18 +740,22 @@ class _DetailLaporanFormState extends State<_DetailLaporanForm> {
   final _latController = TextEditingController();
   final _longController = TextEditingController();
 
-  String _category = kCategories[0];
-  int _severity = 1;
+  String? _category;
+  String? _severity;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    final content = widget.editing?.content;
+    _descController.text = content?.description ?? '';
+    _category = content?.category;
+    _severity = content?.severity;
     if (widget.latitude != null) {
-      _latController.text = widget.latitude!.toStringAsFixed(6);
+      _latController.text = widget.latitude!.toString();
     }
     if (widget.longitude != null) {
-      _longController.text = widget.longitude!.toStringAsFixed(6);
+      _longController.text = widget.longitude!.toString();
     }
   }
 
@@ -680,329 +768,335 @@ class _DetailLaporanFormState extends State<_DetailLaporanForm> {
   }
 
   Future<void> _saveDraft({bool sendToQueue = false}) async {
-    if (!_formKey.currentState!.validate()) return;
-
+    if (_isSaving) return;
     setState(() => _isSaving = true);
-
-    // Simulasi penulisan ke database lokal
-    await Future.delayed(const Duration(seconds: 1));
-
-    final lat = double.tryParse(_latController.text);
-    final lng = double.tryParse(_longController.text);
-    final coordStr = lat != null && lng != null
-        ? 'Lat: ${lat.toStringAsFixed(4)}, Long: ${lng.toStringAsFixed(4)}'
-        : 'Belum ada koordinat';
-
-    // FR-04, FR-05: validasi dan simpan
-    final status =
-        sendToQueue ? ReportStatus.menungguSinyal : ReportStatus.draft;
-
-    // Buat ID baru
-    final newId = 'RPT-${(ReportRepository.reports.length + 1).toString().padLeft(3, '0')}';
-    final photoPath = widget.imagePath;
-    final imageUrl = kIsWeb ? photoPath : '';
-
-    final newReport = Report(
-      id: newId,
-      status: status,
-      coordinates: coordStr,
-      address: 'Lokasi Baru',
-      time: 'Baru saja',
-      imageUrl: imageUrl,
-      type: _category,
-      severity: _severity,
-      notes: _descController.text.trim(),
-      photoLocalPath: photoPath,
-      latitude: lat,
-      longitude: lng,
-      gpsSource: widget.gpsSource,
-    );
-
-    // Tambah ke repository
-    ReportRepository.reports.insert(0, newReport);
-
-    if (!mounted) return;
-
-    final message = sendToQueue
-        ? '📡 Laporan masuk antrean sinkronisasi (Menunggu Sinyal)'
-        : '💾 Laporan berhasil disimpan sebagai Draft Lokal';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: sendToQueue ? AppColors.warning : AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-
-    // Kembali ke halaman sebelumnya (camera tab)
-    Navigator.pop(context);
+    try {
+      await widget.service.save(
+        editing: widget.editing,
+        existingPath: widget.imageFile?.path,
+        newPhoto: widget.imageBytes,
+        source: widget.gpsSource.isEmpty ? null : widget.gpsSource,
+        latitude: _latController.text,
+        longitude: _longController.text,
+        accuracy: widget.accuracy,
+        category: _category,
+        severity: _severity,
+        description: _descController.text,
+        send: sendToQueue,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sendToQueue
+                ? 'Laporan masuk antrean (Menunggu Sinyal).'
+                : 'Laporan tersimpan di perangkat.',
+          ),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(_formError(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isManualGps = widget.gpsSource == 'manual';
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text(
-          'Detail Laporan',
-          style: TextStyle(fontWeight: FontWeight.w700),
+    return PopScope(
+      canPop: !_isSaving,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text(
+            'Detail Laporan',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.text,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
         ),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.text,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Module label
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  '📋 FORM DETAIL & DRAFT',
-                  style: TextStyle(
-                    color: Color(0xFF059669),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+        body: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Module label
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    '📋 FORM DETAIL & DRAFT',
+                    style: TextStyle(
+                      color: Color(0xFF059669),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Konfirmasi Data Laporan',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.text,
+                const SizedBox(height: 12),
+                const Text(
+                  'Konfirmasi Data Laporan',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.text,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Thumbnail foto
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: widget.imageBytes != null
-                    ? Image.memory(
-                        widget.imageBytes!,
-                        width: double.infinity,
-                        height: 160,
-                        fit: BoxFit.cover,
-                      )
-                    : widget.imageFile != null
-                        ? Image.file(
-                            widget.imageFile!,
-                            width: double.infinity,
-                            height: 160,
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            width: double.infinity,
-                            height: 160,
-                            color: AppColors.surfaceDim,
-                            child: const Icon(Icons.image,
-                                size: 48, color: AppColors.textMuted),
+                // Thumbnail foto
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: widget.imageBytes != null
+                      ? Image.memory(
+                          widget.imageBytes!,
+                          width: double.infinity,
+                          height: 160,
+                          fit: BoxFit.cover,
+                        )
+                      : widget.imageFile != null
+                      ? Image.file(
+                          widget.imageFile!,
+                          errorBuilder: (_, error, stack) => const Text(
+                            'Foto tidak ditemukan. Pilih foto pengganti.',
                           ),
-              ),
-              const SizedBox(height: 16),
-
-              // Info GPS
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceDim,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.border),
+                          width: double.infinity,
+                          height: 160,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          width: double.infinity,
+                          height: 160,
+                          color: AppColors.surfaceDim,
+                          child: const Icon(
+                            Icons.image,
+                            size: 48,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Data Spasial:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: AppColors.text,
+                const SizedBox(height: 16),
+
+                // Info GPS
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceDim,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Data Spasial:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: AppColors.text,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Sumber GPS: ${widget.gpsSource}',
-                      style: const TextStyle(
-                          fontSize: 12, color: AppColors.textMuted),
-                    ),
-                    if (!isManualGps) ...[
+                      const SizedBox(height: 4),
                       Text(
-                        'Lat: ${widget.latitude?.toStringAsFixed(6) ?? "-"} · Long: ${widget.longitude?.toStringAsFixed(6) ?? "-"}',
+                        'Sumber GPS: ${widget.gpsSource}',
                         style: const TextStyle(
-                            fontSize: 12, color: AppColors.textMuted),
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                      if (!isManualGps) ...[
+                        Text(
+                          'Lat: ${widget.latitude?.toStringAsFixed(6) ?? "-"} · Long: ${widget.longitude?.toStringAsFixed(6) ?? "-"}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Manual GPS fields (only shown for gallery photos)
+                if (isManualGps) ...[
+                  const _FormLabel('KOORDINAT GPS (MANUAL)'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _latController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          decoration: _inputDecoration('Latitude'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _longController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          decoration: _inputDecoration('Longitude'),
+                        ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+                  ),
+                  const SizedBox(height: 20),
+                ],
 
-              // Manual GPS fields (only shown for gallery photos)
-              if (isManualGps) ...[
-                const _FormLabel('KOORDINAT GPS (MANUAL)'),
+                // Kategori
+                if (widget.gpsSource.isNotEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.map_outlined),
+                    label: const Text('Pratinjau lokasi'),
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      builder: (_) => SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: ReportLocationMap(
+                            latitude: double.tryParse(
+                              _latController.text.trim(),
+                            ),
+                            longitude: double.tryParse(
+                              _longController.text.trim(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                const _FormLabel('KATEGORI KERUSAKAN'),
+                DropdownButtonFormField<String>(
+                  initialValue: _category,
+                  decoration: _inputDecoration('Pilih kategori'),
+                  items: [
+                    for (final c in {...kCategories, ?_category})
+                      DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: _isSaving
+                      ? null
+                      : (v) => setState(() => _category = v!),
+                ),
+                const SizedBox(height: 16),
+
+                // Keparahan
+                const _FormLabel('TINGKAT KEPARAHAN'),
+                DropdownButtonFormField<String>(
+                  initialValue: _severity,
+                  decoration: _inputDecoration('Pilih tingkat'),
+                  items: [
+                    for (final level in {...kSeverityLabels, ?_severity})
+                      DropdownMenuItem(value: level, child: Text(level)),
+                  ],
+                  onChanged: _isSaving
+                      ? null
+                      : (v) => setState(() => _severity = v!),
+                ),
+                const SizedBox(height: 16),
+
+                // Deskripsi
+                const _FormLabel('DESKRIPSI LAPORAN'),
+                TextFormField(
+                  controller: _descController,
+                  enabled: !_isSaving,
+                  maxLines: 3,
+                  maxLength: 300,
+                  decoration: _inputDecoration(
+                    'Deskripsikan kondisi kerusakan jalan...',
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Action buttons
                 Row(
                   children: [
                     Expanded(
-                      child: TextFormField(
-                        controller: _latController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true, signed: true),
-                        decoration: _inputDecoration('Latitude'),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Wajib diisi';
-                          }
-                          if (double.tryParse(v.trim()) == null) {
-                            return 'Format salah';
-                          }
-                          return null;
-                        },
+                      child: OutlinedButton.icon(
+                        onPressed: _isSaving
+                            ? null
+                            : () => _saveDraft(sendToQueue: false),
+                        icon: const Icon(Icons.save_outlined, size: 16),
+                        label: Text(
+                          widget.editing == null
+                              ? 'Simpan Draft'
+                              : 'Simpan perubahan',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: AppColors.primary),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: TextFormField(
-                        controller: _longController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true, signed: true),
-                        decoration: _inputDecoration('Longitude'),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Wajib diisi';
-                          }
-                          if (double.tryParse(v.trim()) == null) {
-                            return 'Format salah';
-                          }
-                          return null;
-                        },
+                      child: FilledButton.icon(
+                        onPressed:
+                            _isSaving ||
+                                widget.editing?.syncStatus ==
+                                    SyncStatus.gagalTerkirim
+                            ? null
+                            : () => _saveDraft(sendToQueue: true),
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.send_rounded, size: 16),
+                        label: Text(_isSaving ? 'Menyimpan...' : 'Kirim'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
               ],
-
-              // Kategori
-              const _FormLabel('KATEGORI KERUSAKAN'),
-              DropdownButtonFormField<String>(
-                initialValue: _category,
-                decoration: _inputDecoration('Pilih kategori'),
-                items: [
-                  for (final c in kCategories)
-                    DropdownMenuItem(value: c, child: Text(c)),
-                ],
-                onChanged:
-                    _isSaving ? null : (v) => setState(() => _category = v!),
-              ),
-              const SizedBox(height: 16),
-
-              // Keparahan
-              const _FormLabel('TINGKAT KEPARAHAN'),
-              DropdownButtonFormField<int>(
-                initialValue: _severity,
-                decoration: _inputDecoration('Pilih tingkat'),
-                items: [
-                  for (var i = 0; i < kSeverityLabels.length; i++)
-                    DropdownMenuItem(
-                      value: i,
-                      child: Text('$i - ${kSeverityLabels[i]}'),
-                    ),
-                ],
-                onChanged:
-                    _isSaving ? null : (v) => setState(() => _severity = v!),
-              ),
-              const SizedBox(height: 16),
-
-              // Deskripsi
-              const _FormLabel('DESKRIPSI LAPORAN'),
-              TextFormField(
-                controller: _descController,
-                enabled: !_isSaving,
-                maxLines: 3,
-                maxLength: 300,
-                decoration: _inputDecoration('Deskripsikan kondisi kerusakan jalan...'),
-                validator: (v) {
-                  final text = v?.trim() ?? '';
-                  if (text.isEmpty) return 'Deskripsi wajib diisi';
-                  if (text.length < 10) {
-                    return 'Minimal 10 karakter (kurang ${10 - text.length})';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed:
-                          _isSaving ? null : () => _saveDraft(sendToQueue: false),
-                      icon: const Icon(Icons.save_outlined, size: 16),
-                      label: const Text('Simpan Draft'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: AppColors.primary),
-                        textStyle: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed:
-                          _isSaving ? null : () => _saveDraft(sendToQueue: true),
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.send_rounded, size: 16),
-                      label: Text(_isSaving ? 'Menyimpan...' : 'Kirim'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        textStyle: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1055,4 +1149,18 @@ class _FormLabel extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formError(Object error) {
+  if (error is FormatException) return error.message;
+  if (error is StateError && error.message == 'Tidak ada sesi aktif') {
+    return 'Sesi berakhir. Silakan masuk kembali.';
+  }
+  if (error is StateError && error.message.startsWith('Laporan terkunci')) {
+    return error.message;
+  }
+  if (error is FileSystemException) {
+    return 'Foto tidak tersedia. Periksa penyimpanan atau pilih foto kembali.';
+  }
+  return 'Penyimpanan laporan tidak tersedia. Coba kembali pada perangkat yang didukung.';
 }

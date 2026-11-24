@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'app_modules.dart';
 import 'features/auth/auth_module.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_theme.dart';
@@ -7,12 +9,15 @@ import 'theme/app_theme.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   AuthModule.init();
-  runApp(
-    AuthScope(
-      controller: AuthModule.controller,
-      child: const AspalApp(),
-    ),
-  );
+  if (!kIsWeb &&
+      const {
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }.contains(defaultTargetPlatform)) {
+    AuthModule.gateway.registerGateway(reportsModule.gateway);
+  }
+  runApp(AuthScope(controller: AuthModule.controller, child: const AspalApp()));
 }
 
 class AspalApp extends StatelessWidget {

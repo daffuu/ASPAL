@@ -24,8 +24,11 @@ class AuthSession {
   /// Memeriksa apakah access token telah melewati batas masa berlaku.
   bool isAccessTokenExpired({DateTime? now}) {
     final current = now ?? DateTime.now();
-    return current.isAfter(tokenExpiresAt);
+    return !current.isBefore(tokenExpiresAt);
   }
+
+  bool get needsTokenRefresh =>
+      isAccessTokenExpired(now: DateTime.now().add(const Duration(minutes: 1)));
 
   /// Memeriksa apakah sesi offline (30 hari) telah kedaluwarsa.
   bool isOfflineSessionExpired({DateTime? now}) {
